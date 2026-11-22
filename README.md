@@ -2,7 +2,7 @@
 
 A peer-to-peer chat app. Rose `#D1305E` and mint `#30D1A3` on near-black.
 
-Messages travel machine to machine over libp2p. There is no server, no account,
+Messages travel machine to machine over Rust-libp2p. There is no server, no account,
 no message store in the middle.
 
 ![Bling talking to a peer](shots/04-live-peer.png)
