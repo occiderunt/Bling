@@ -86,6 +86,6 @@ cargo run --bin twonode  # networking checks on real sockets
   validation), but payloads are plain JSON, not a sealed E2E format.
 - Ping latency shows `0ms` over loopback; that is honest, not a bug.
 
-## License
+## License and Credits
 
-MIT
+MIT licensed, couldn't be done without [Rust-p2p](https://github.com/libp2p/rust-libp2p).
