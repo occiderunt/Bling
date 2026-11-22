@@ -88,4 +88,4 @@ cargo run --bin twonode  # networking checks on real sockets
 
 ## License and Credits
 
-MIT licensed, couldn't be done without [Rust-p2p](https://github.com/libp2p/rust-libp2p).
+MIT licensed, couldn't be done without [Rust-libp2p](https://github.com/libp2p/rust-libp2p).
