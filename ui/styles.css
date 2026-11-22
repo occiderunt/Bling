@@ -536,9 +536,11 @@ button {
 /* ---------- chat ---------- */
 
 .chat {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   background:
     radial-gradient(900px 420px at 78% -12%, rgba(209, 48, 94, 0.09), transparent 65%),
     radial-gradient(700px 380px at 8% 108%, rgba(48, 209, 163, 0.06), transparent 65%),
@@ -593,12 +595,12 @@ button {
 
 .messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 22px 24px 10px;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  scroll-behavior: smooth;
 }
 
 .notice {
@@ -929,4 +931,136 @@ button {
   .app {
     grid-template-columns: 64px 250px minmax(0, 1fr);
   }
+}
+
+/* room rows: leave button on hover */
+.room-row {
+  position: relative;
+}
+
+.room-row .room {
+  padding-right: 28px;
+}
+
+.room-del {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--muted-2);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.room-row:hover .room-del,
+.room-del:focus-visible {
+  opacity: 1;
+}
+
+.room-del:hover {
+  color: var(--rose-bright);
+  background: rgba(209, 48, 94, 0.16);
+}
+
+/* header adds an invite action next to the transport badges */
+.chat-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.invite {
+  height: 24px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--mint);
+  border: 1px solid rgba(48, 209, 163, 0.35);
+  background: rgba(48, 209, 163, 0.07);
+}
+
+.invite:hover {
+  background: rgba(48, 209, 163, 0.16);
+  border-color: rgba(48, 209, 163, 0.6);
+}
+
+/* jump-to-newest pill */
+.jump {
+  position: absolute;
+  right: 30px;
+  bottom: 108px;
+  z-index: 5;
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text);
+  background: rgba(30, 22, 28, 0.92);
+  border: 1px solid rgba(209, 48, 94, 0.45);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(10px);
+}
+
+.jump[hidden] {
+  display: none;
+}
+
+.jump:hover {
+  border-color: var(--rose-bright);
+  color: #fff;
+}
+
+/* A short conversation sits at the bottom of the pane, like every chat app.
+   The auto margin collapses to 0 once the list overflows, so scrolling to the
+   top still reaches the first message. */
+.messages > .msg:first-child {
+  margin-top: auto;
+}
+
+/* messages are readable and copyable, links look like links */
+.msg-bubble {
+  user-select: text;
+  cursor: text;
+  overflow-wrap: anywhere;
+}
+
+.msg-bubble .link {
+  color: var(--mint);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(48, 209, 163, 0.5);
+}
+
+.msg-bubble .link:hover {
+  text-decoration-color: var(--mint);
+}
+
+/* day separators */
+.day {
+  align-self: center;
+  margin: 16px 0 10px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.notice {
+  user-select: text;
 }

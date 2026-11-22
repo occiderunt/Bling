@@ -52,7 +52,16 @@ Two ways to connect:
    needs Local Network permission for this.
 2. **Paste a multiaddr**: copy `/ip4/<ip>/tcp/<port>/p2p/<peer-id>` from one
    instance into the other's sidebar. This always works, including over
-   loopback.
+   loopback. The app asks for port 4101 both times, so the address survives a
+   restart.
+
+Rooms live in the sidebar: `+` creates one, hovering a room reveals `×` to
+leave it, and **invite** in the header copies a `bling://room@multiaddr` link
+that connects and opens the room when pasted into the same box.
+
+Peers announce their nickname the moment they connect, so names appear before
+anyone speaks. If a peer drops, the app retries every known address for it
+(backoff up to 20s) and reconnects on its own.
 
 `BLING_DATA=/tmp/whatever cargo run --bin bling` gives an instance its own
 identity, and `BLING_DIAL=/ip4/.../p2p/...` auto-dials a peer at startup.
@@ -60,9 +69,9 @@ identity, and `BLING_DIAL=/ip4/.../p2p/...` auto-dials a peer at startup.
 ## Checks
 
 ```bash
-node scripts/smoke.mjs   # 22 UI checks against a mocked bridge
+node scripts/smoke.mjs   # 43 UI checks against a mocked bridge
 node scripts/shot.mjs    # screenshots into shots/
-cargo run --bin twonode  # 8 networking checks on real sockets
+cargo run --bin twonode  # networking checks on real sockets
 ```
 
 ## Known gaps

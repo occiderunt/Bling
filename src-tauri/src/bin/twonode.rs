@@ -68,6 +68,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     check("node A connected to node B", connected);
+
+    // Presence: B learns A's name without A sending a chat message.
+    net_a.send(Cmd::Announce("alice".into()));
+    let mut named = false;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    while tokio::time::Instant::now() < deadline {
+        if let Ok(Some(Out::Nick { nick, .. })) =
+            tokio::time::timeout(Duration::from_millis(300), rx_b.recv()).await
+        {
+            if nick == "alice" {
+                named = true;
+                break;
+            }
+        }
+    }
+    check("a nickname arrives without any chat message", named);
+
     tokio::time::sleep(Duration::from_millis(2200)).await;
 
     net_a.send(Cmd::Publish {

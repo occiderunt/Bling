@@ -13,6 +13,7 @@ const state = {
   rooms: ["lobby"],
   current: "lobby",
   messages: {},
+  notices: {},
   unread: {},
   live: false,
 };
@@ -101,6 +102,7 @@ function renderRooms() {
 
   for (const room of state.rooms) {
     const li = document.createElement("li");
+    li.className = "room-row";
     const btn = document.createElement("button");
     btn.className = `room${room === state.current ? " active" : ""}`;
     btn.innerHTML = '<span class="hash">#</span>';
@@ -115,7 +117,17 @@ function renderRooms() {
       btn.appendChild(b);
     }
     btn.addEventListener("click", () => switchRoom(room));
-    li.appendChild(btn);
+
+    const del = document.createElement("button");
+    del.className = "room-del";
+    del.title = `leave #${room}`;
+    del.textContent = "×";
+    del.addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeRoom(room);
+    });
+
+    li.append(btn, del);
     list.appendChild(li);
 
     const rb = document.createElement("button");
@@ -192,13 +204,79 @@ function renderAddr() {
   btn.dataset.addr = dialable;
 }
 
-function renderMessages() {
+let paintedRoom = null;
+
+const URL_RE = /\bhttps?:\/\/[^\s<>"']+/g;
+
+function scrollToEnd(box = $("#messages")) {
+  box.scrollTo({ top: box.scrollHeight, behavior: "instant" });
+}
+
+function updateJump() {
   const box = $("#messages");
-  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+  const far = box.scrollHeight - box.scrollTop - box.clientHeight > 140;
+  $("#jumpLatest").hidden = !far || Boolean(box.querySelector(".hero"));
+}
+
+function dayKey(ts) {
+  return new Date(ts).toDateString();
+}
+
+function dayLabel(ts) {
+  const now = new Date();
+  const then = new Date(ts);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const that = new Date(then.getFullYear(), then.getMonth(), then.getDate());
+  const days = Math.round((today - that) / 86400000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return then.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
+}
+
+function dayDivider(ts) {
+  const el = document.createElement("div");
+  el.className = "day";
+  el.textContent = dayLabel(ts);
+  return el;
+}
+
+function fillText(el, text) {
+  let at = 0;
+  for (const match of text.matchAll(URL_RE)) {
+    if (match.index > at) el.appendChild(document.createTextNode(text.slice(at, match.index)));
+    const raw = match[0];
+    const tail = (raw.match(/[.,!?;:)\]]+$/) || [""])[0];
+    const href = tail ? raw.slice(0, -tail.length) : raw;
+    const a = document.createElement("a");
+    a.className = "link";
+    a.href = href;
+    a.textContent = href;
+    a.title = href;
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (invoke) invoke("bling_open_url", { url: href }).catch((err) => toast(String(err), "warn"));
+      else window.open(href, "_blank", "noopener");
+    });
+    el.appendChild(a);
+    if (tail) el.appendChild(document.createTextNode(tail));
+    at = match.index + raw.length;
+  }
+  if (at < text.length) el.appendChild(document.createTextNode(text.slice(at)));
+  if (!el.childNodes.length) el.textContent = text;
+}
+
+function renderMessages(forceBottom = false) {
+  const box = $("#messages");
+  const firstPaint = paintedRoom !== state.current;
+  const stick =
+    forceBottom || firstPaint || box.scrollHeight - box.scrollTop - box.clientHeight < 96;
+  const prevTop = box.scrollTop;
+
   box.innerHTML = "";
   const list = state.messages[state.current] || [];
+  const notices = state.notices[state.current] || [];
 
-  if (list.length === 0) {
+  if (list.length === 0 && notices.length === 0) {
     const hero = document.createElement("div");
     hero.className = "hero";
     hero.innerHTML = `
@@ -207,11 +285,40 @@ function renderMessages() {
       <p>Bling talks straight to other people's machines, no server in the middle.
       Open a second copy, or paste a multiaddr in the sidebar to connect by hand.</p>`;
     box.appendChild(hero);
+    paintedRoom = state.current;
+    updateJump();
     return;
   }
 
+  const items = [
+    ...list.map((m) => ({ kind: "msg", ts: m.ts, m })),
+    ...notices.map((n) => ({ kind: "notice", ts: n.ts, n })),
+  ].sort((a, b) => a.ts - b.ts);
+
   let prev = null;
-  for (const msg of list) {
+  let lastDay = null;
+
+  for (const item of items) {
+    const day = dayKey(item.ts);
+    if (day !== lastDay) {
+      box.appendChild(dayDivider(item.ts));
+      lastDay = day;
+      prev = null;
+    }
+
+    if (item.kind === "notice") {
+      const el = document.createElement("div");
+      el.className = "notice";
+      const dot = document.createElement("i");
+      const span = document.createElement("span");
+      span.textContent = item.n.text;
+      el.append(dot, span);
+      box.appendChild(el);
+      prev = null;
+      continue;
+    }
+
+    const msg = item.m;
     const mine = msg.mine || msg.from === state.peerId;
     const el = document.createElement("article");
     el.className = `msg${mine ? " mine" : ""}`;
@@ -245,7 +352,7 @@ function renderMessages() {
 
     const bubble = document.createElement("div");
     bubble.className = "msg-bubble";
-    bubble.textContent = msg.text;
+    fillText(bubble, msg.text);
 
     col.append(head, bubble);
     el.append(av, col);
@@ -253,19 +360,18 @@ function renderMessages() {
     prev = { from: msg.from, mine, ts: msg.ts };
   }
 
-  if (nearBottom) box.scrollTop = box.scrollHeight;
+  paintedRoom = state.current;
+  if (stick) scrollToEnd(box);
+  else box.scrollTop = prevTop;
+  updateJump();
 }
 
 function addNotice(text) {
-  const el = document.createElement("div");
-  el.className = "notice";
-  const dot = document.createElement("i");
-  const span = document.createElement("span");
-  span.textContent = text;
-  el.append(dot, span);
-  const box = $("#messages");
-  box.appendChild(el);
-  box.scrollTop = box.scrollHeight;
+  const room = state.current;
+  if (!state.notices[room]) state.notices[room] = [];
+  state.notices[room].push({ text, ts: Date.now() });
+  if (state.notices[room].length > 40) state.notices[room].shift();
+  renderMessages();
 }
 
 function toast(text, kind = "") {
@@ -293,9 +399,49 @@ function switchRoom(room) {
   delete state.unread[room];
   saveLocal();
   renderRooms();
-  renderMessages();
+  renderMessages(true);
   renderIdentity();
   $("#input").focus();
+}
+
+function removeRoom(room) {
+  if (room === "lobby") {
+    toast("lobby always stays", "warn");
+    return;
+  }
+  const idx = state.rooms.indexOf(room);
+  if (idx < 0) return;
+  state.rooms.splice(idx, 1);
+  delete state.messages[room];
+  delete state.unread[room];
+  invoke?.("bling_leave", { room }).catch(() => {});
+  if (state.current === room) state.current = "lobby";
+  saveLocal();
+  renderRooms();
+  renderMessages(true);
+  renderIdentity();
+  toast(`left #${room}`);
+}
+
+function inviteLink(room = state.current) {
+  const addr = $("#myAddr").dataset.addr;
+  return addr ? `bling://${room}@${addr}` : null;
+}
+
+function parseInvite(raw) {
+  if (!raw.startsWith("bling://")) return null;
+  const at = raw.indexOf("@", 8);
+  if (at < 0) return null;
+  const room = raw
+    .slice(8, at)
+    .trim()
+    .toLowerCase()
+    .replace(/^#/, "")
+    .replace(/[^a-z0-9-]/g, "-")
+    .slice(0, 24);
+  const addr = raw.slice(at + 1).trim();
+  if (!room || !addr.startsWith("/")) return null;
+  return { room, addr };
 }
 
 function addRoom(raw) {
@@ -334,6 +480,18 @@ function handleEvent(ev) {
     case "peer":
       handlePeer(ev);
       break;
+    case "nick": {
+      const cur = state.peers.get(ev.peer_id) || {
+        peer_id: ev.peer_id,
+        online: false,
+        rtt_ms: null,
+        addr: null,
+      };
+      cur.nick = ev.nick;
+      state.peers.set(ev.peer_id, cur);
+      renderPeers();
+      break;
+    }
     case "message": {
       if (ev.from === state.peerId) break;
       const peer = state.peers.get(ev.from);
@@ -350,7 +508,7 @@ function handleEvent(ev) {
       break;
     }
     case "notice":
-      toast(ev.text);
+      addNotice(ev.text);
       break;
     default:
       break;
@@ -366,11 +524,12 @@ async function start() {
   try {
     const channel = new Channel();
     channel.onmessage = handleEvent;
-    const me = await invoke("bling_start", { channel });
+    const me = await invoke("bling_start", { channel, nick: state.nick });
     state.peerId = me.peer_id;
     state.live = true;
     renderIdentity();
     renderNetState();
+    for (const room of state.rooms) invoke("bling_join", { room }).catch(() => {});
   } catch (err) {
     $("#netState").querySelector("span").textContent = "offline";
     toast(`swarm failed: ${err}`, "warn");
@@ -424,7 +583,10 @@ function editNick() {
   const done = (commit) => {
     if (closed) return;
     closed = true;
-    if (commit && input.value.trim()) state.nick = input.value.trim();
+    if (commit && input.value.trim()) {
+      state.nick = input.value.trim();
+      invoke?.("bling_announce", { nick: state.nick }).catch(() => {});
+    }
     if (input.parentNode) input.replaceWith(btn);
     renderIdentity();
     saveLocal();
@@ -467,6 +629,25 @@ function wire() {
     if (addr) copy(addr, "address copied, send it to a friend");
   });
 
+  $("#inviteBtn").addEventListener("click", () => {
+    const link = inviteLink();
+    if (!link) {
+      toast("still working out my address", "warn");
+      return;
+    }
+    copy(link, `invite to #${state.current} copied`);
+  });
+
+  $("#jumpLatest").addEventListener("click", () => scrollToEnd());
+
+  $("#messages").addEventListener("scroll", updateJump);
+
+  $("#newRoomName").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      $("#newRoomForm").hidden = true;
+    }
+  });
+
   $("#addRoomBtn").addEventListener("click", () => {
     const form = $("#newRoomForm");
     form.hidden = !form.hidden;
@@ -482,15 +663,21 @@ function wire() {
 
   $("#dialForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const addr = $("#dialAddr").value.trim();
-    if (!addr) return;
+    const raw = $("#dialAddr").value.trim();
+    if (!raw) return;
+    const invite = parseInvite(raw);
+    const addr = invite ? invite.addr : raw;
     if (!addr.startsWith("/")) {
-      toast("that is not a multiaddr", "warn");
+      toast("that is not a multiaddr or invite", "warn");
       return;
     }
     try {
       await invoke("bling_dial", { addr });
       $("#dialAddr").value = "";
+      if (invite) {
+        addRoom(invite.room);
+        toast(`joined #${invite.room}`);
+      }
     } catch (err) {
       toast(String(err), "warn");
     }

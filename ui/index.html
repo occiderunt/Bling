@@ -51,7 +51,7 @@
             Nobody else yet. Peers on your Wi-Fi appear here on their own.
           </div>
           <form class="connect" id="dialForm">
-            <input id="dialAddr" placeholder="paste a multiaddr" autocomplete="off" spellcheck="false" />
+            <input id="dialAddr" placeholder="multiaddr or invite" autocomplete="off" spellcheck="false" />
             <button type="submit" title="Connect">→</button>
           </form>
           <div class="my-addr">
@@ -67,13 +67,17 @@
             <h1 id="roomTitle"># lobby</h1>
             <p id="roomSub">peer to peer · encrypted transport</p>
           </div>
-          <div class="badges">
-            <span class="badge mint" id="transportBadge">noise</span>
-            <span class="badge" id="protoBadge">gossipsub</span>
+          <div class="chat-actions">
+            <button class="invite" id="inviteBtn" title="Copy an invite to this room">invite</button>
+            <div class="badges">
+              <span class="badge mint" id="transportBadge">noise</span>
+              <span class="badge" id="protoBadge">gossipsub</span>
+            </div>
           </div>
         </header>
 
         <div class="messages" id="messages"></div>
+        <button class="jump" id="jumpLatest" hidden>↓ newest</button>
 
         <div class="composer">
           <div class="composer-inner">

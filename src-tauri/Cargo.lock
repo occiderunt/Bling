@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "bling"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "futures",
  "libp2p",

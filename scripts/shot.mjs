@@ -78,13 +78,13 @@ function seed({ nick = "mira", messages = [], peers = [], me = "", peerA = "" } 
         emit({
           type: "listening",
           addrs: [
-            "/ip4/192.168.1.42/tcp/51833",
-            "/ip4/127.0.0.1/tcp/51833",
-            "/ip4/192.168.1.42/udp/51834/quic-v1",
+            "/ip4/192.168.1.42/tcp/4101",
+            "/ip4/127.0.0.1/tcp/4101",
+            "/ip4/192.168.1.42/udp/4101/quic-v1",
           ],
         });
         for (const p of peers) {
-          emit({ type: "peer", peer_id: p.id, addr: p.addr || null, online: true, rtt_ms: p.rtt ?? null });
+          emit({ type: "peer", peer_id: p.id, addr: p.addr || null, online: true, rtt_ms: p.rtt ?? null, nick: p.nick });
         }
       }, 40);
       return { peer_id: me };

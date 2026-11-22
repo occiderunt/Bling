@@ -10,10 +10,29 @@ use tokio::sync::mpsc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let listen_only = std::env::args().any(|a| a == "--listen");
+    let args: Vec<String> = std::env::args().collect();
+    let listen_only = args.iter().any(|a| a == "--listen");
+    let port = args
+        .iter()
+        .position(|a| a == "--port")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(0);
 
-    let key = net::new_identity();
-    let (net, swarm, cmds) = net::create(key, &["/ip4/0.0.0.0/tcp/0"])?;
+    let data = args
+        .iter()
+        .position(|a| a == "--data")
+        .and_then(|i| args.get(i + 1))
+        .map(std::path::PathBuf::from);
+    let key = match data {
+        Some(dir) => {
+            std::fs::create_dir_all(&dir)?;
+            net::load_or_create_key(&dir.join("identity.key"))?
+        }
+        None => net::new_identity(),
+    };
+    let listen = format!("/ip4/0.0.0.0/tcp/{port}");
+    let (net, swarm, cmds) = net::create(key, &[listen.as_str()])?;
     let (tx, mut rx) = mpsc::unbounded_channel();
     tokio::spawn(net::drive(swarm, cmds, tx, vec!["lobby".into()]));
     println!("bot peer {}", net.peer_id);
@@ -49,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let patience = if listen_only { 60 } else { 15 };
+    let patience = if listen_only { 600 } else { 15 };
     while !connected && started.elapsed() < Duration::from_secs(patience + 10) {
         if let Ok(Some(Out::Peer { online: true, .. })) =
             tokio::time::timeout(Duration::from_millis(300), rx.recv()).await

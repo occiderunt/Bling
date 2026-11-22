@@ -43,12 +43,14 @@ await page.setViewport({ width: 1180, height: 780 });
 
 const errors = [];
 const failures = [];
+let checks = 0;
 page.on("console", (m) => {
   if (m.type() === "error") errors.push(m.text());
 });
 page.on("pageerror", (e) => errors.push(String(e)));
 
 const check = (label, ok) => {
+  checks += 1;
   if (!ok) failures.push(label);
   console.log(`${ok ? "ok  " : "FAIL"} ${label}`);
 };
@@ -61,11 +63,16 @@ await page.evaluateOnNewDocument(
       { id: "s2", from: me, nick: "mira", text: "that's the brand", ts: now - 260000, mine: true },
       { id: "s3", from: peerB, nick: "robin", text: "4ms on the same wifi", ts: now - 200000, mine: false },
       { id: "s4", from: me, nick: "mira", text: "now try it off-network", ts: now - 160000, mine: true },
+      { id: "s0", from: peerB, nick: "robin", text: "yesterday's thread", ts: now - 26 * 60 * 60 * 1000, mine: false },
     ];
     localStorage.setItem(
       "bling.v1",
       JSON.stringify({ nick: "mira", rooms: ["lobby", "design"], current: "lobby", messages: { lobby: history } }),
     );
+
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: async (text) => { window.__clip = text; } },
+    });
 
     class FakeChannel {
       constructor() {
@@ -83,7 +90,7 @@ await page.evaluateOnNewDocument(
           emit({ type: "ready", peer_id: me });
           emit({
             type: "listening",
-            addrs: ["/ip4/192.168.1.42/tcp/51833", "/ip4/127.0.0.1/tcp/51833"],
+            addrs: ["/ip4/192.168.1.42/tcp/4101", "/ip4/127.0.0.1/tcp/4101"],
           });
           emit({ type: "peer", peer_id: peerA, online: true, rtt_ms: 4, nick: "nadia" });
           emit({ type: "peer", peer_id: peerB, online: true, rtt_ms: 11, nick: "robin" });
@@ -93,6 +100,7 @@ await page.evaluateOnNewDocument(
       if (cmd === "bling_send") return null;
       if (cmd === "bling_dial") return null;
       if (cmd === "bling_join") return null;
+      if (cmd === "bling_leave") return null;
       return null;
     };
     window.__TAURI__ = { core: { invoke, Channel: FakeChannel } };
@@ -117,7 +125,21 @@ check(
   (await page.$$eval(".peer .p-name", (n) => n.map((x) => x.textContent))).join(",") === "nadia,robin",
 );
 check("latency shows for a peer", (await page.$$eval(".peer .p-latency", (n) => n.map((x) => x.textContent))).includes("4ms"));
-check("history renders four bubbles", (await page.$$eval(".msg", (n) => n.length)) === 4);
+
+// Presence: a nickname arrives before any message does.
+await page.evaluate(({ peerB }) => {
+  window.__chan.onmessage({ type: "nick", peer_id: peerB, nick: "robin" });
+}, { peerB: PEER_B });
+await new Promise((r) => setTimeout(r, 100));
+check(
+  "presence names a peer",
+  (await page.$$eval(".peer .p-name", (n) => n.map((x) => x.textContent))).includes("robin"),
+);
+check("history renders five bubbles", (await page.$$eval(".msg", (n) => n.length)) === 5);
+check(
+  "day dividers split yesterday from today",
+  (await page.$$eval(".day", (n) => n.map((x) => x.textContent))).join("|") === "Yesterday|Today",
+);
 check("my messages are right aligned", (await page.$$eval(".msg.mine", (n) => n.length)) === 2);
 check(
   "address is dialable with a peer id",
@@ -155,6 +177,49 @@ check(
   (await page.$$eval(".msg", (n) => n.length)) === before + 2,
 );
 
+// Links inside a message.
+await page.evaluate(({ peerA }) => {
+  window.__chan.onmessage({
+    type: "message",
+    id: "live-link",
+    room: "lobby",
+    from: peerA,
+    nick: "nadia",
+    text: "spec is at https://libp2p.io/docs, read it",
+    ts: Date.now() + 10,
+  });
+}, { peerA: PEER_A });
+await new Promise((r) => setTimeout(r, 150));
+const link = await page.$eval(".msg:last-of-type .msg-bubble a.link", (a) => ({
+  href: a.getAttribute("href"),
+  text: a.textContent,
+}));
+check("a url in a message becomes a link", link.href === "https://libp2p.io/docs" && link.text === link.href);
+check(
+  "message text is selectable",
+  (await page.$eval(".msg-bubble", (n) => getComputedStyle(n).userSelect)) === "text",
+);
+await page.click(".msg:last-of-type .msg-bubble a.link");
+await new Promise((r) => setTimeout(r, 120));
+const openCall = (await page.evaluate(() => window.__calls)).filter((c) => c.cmd === "bling_open_url").pop();
+check("clicking a link asks the app to open it", openCall?.args.url === "https://libp2p.io/docs");
+
+// Notices survive a redraw.
+await page.evaluate(() => {
+  window.__chan.onmessage({ type: "notice", text: "joined #lobby" });
+  window.__chan.onmessage({
+    type: "message",
+    id: "after-notice",
+    room: "lobby",
+    from: "12D3KooWHm3vT8pLq5zR1cJdY6bN4xA2kS9uE0gW7fM5hQ3nD8yK",
+    nick: "mira",
+    text: "still here",
+    ts: Date.now() + 20,
+  });
+});
+await new Promise((r) => setTimeout(r, 200));
+check("a notice stays in the transcript", (await page.$$eval(".notice", (n) => n.length)) >= 1);
+
 // Rooms.
 await page.click("#addRoomBtn");
 await page.type("#newRoomName", "Build Log");
@@ -189,6 +254,99 @@ await page.evaluate(() => {
 await new Promise((r) => setTimeout(r, 120));
 check("switching back clears the badge", (await page.$$(".room .unread")).length === 0);
 
+// Scrolling: fill the room so it actually overflows.
+await page.evaluate(({ peerB }) => {
+  for (let i = 0; i < 24; i += 1) {
+    window.__chan.onmessage({
+      type: "message",
+      id: `bulk-${i}`,
+      room: "lobby",
+      from: peerB,
+      nick: "robin",
+      text: `filler message number ${i} so the pane has to scroll`,
+      ts: Date.now() + i,
+    });
+  }
+}, { peerB: PEER_B });
+await new Promise((r) => setTimeout(r, 300));
+const atBottom = await page.evaluate(() => {
+  const b = document.querySelector("#messages");
+  return { top: b.scrollTop, max: b.scrollHeight - b.clientHeight };
+});
+check("chat sticks to the newest message", atBottom.max > 0 && atBottom.top >= atBottom.max - 6);
+
+await page.evaluate(() => { document.querySelector("#messages").scrollTop = 0; });
+await page.evaluate(({ peerB }) => {
+  window.__chan.onmessage({
+    type: "message",
+    id: "while-reading",
+    room: "lobby",
+    from: peerB,
+    nick: "robin",
+    text: "arrives while you are reading history",
+    ts: Date.now() + 500,
+  });
+}, { peerB: PEER_B });
+await new Promise((r) => setTimeout(r, 200));
+check(
+  "reading history is not yanked to the bottom",
+  (await page.evaluate(() => document.querySelector("#messages").scrollTop)) < 60,
+);
+check("jump pill shows when scrolled up", !(await page.$eval("#jumpLatest", (n) => n.hidden)));
+await page.click("#jumpLatest");
+await new Promise((r) => setTimeout(r, 300));
+check(
+  "jump pill returns to the newest message",
+  await page.evaluate(() => {
+    const b = document.querySelector("#messages");
+    return b.scrollTop >= b.scrollHeight - b.clientHeight - 6;
+  }),
+);
+
+// Invites.
+await page.click("#inviteBtn");
+await new Promise((r) => setTimeout(r, 120));
+const clip = await page.evaluate(() => window.__clip || "");
+check(
+  "invite copies a bling:// link with room and address",
+  clip.startsWith("bling://lobby@/ip4/") && clip.includes("/p2p/"),
+);
+
+await page.$eval("#dialAddr", (n) => (n.value = ""));
+await page.type("#dialAddr", `bling://design@/ip4/192.168.1.42/tcp/4101/p2p/${PEER_A}`);
+await page.keyboard.press("Enter");
+await new Promise((r) => setTimeout(r, 150));
+const dialCall = (await page.evaluate(() => window.__calls)).filter((c) => c.cmd === "bling_dial").pop();
+check("invite dials the address it carries", dialCall?.args.addr === `/ip4/192.168.1.42/tcp/4101/p2p/${PEER_A}`);
+check("invite opens the invited room", (await page.$eval("#roomTitle", (n) => n.textContent)) === "# design");
+
+// Leaving a room.
+await page.evaluate(() => {
+  const row = [...document.querySelectorAll(".room-row")].find((r) => r.textContent.includes("build-log"));
+  row?.querySelector(".room-del")?.click();
+});
+await new Promise((r) => setTimeout(r, 150));
+check(
+  "deleting a room removes it from the sidebar",
+  await page.evaluate(() => ![...document.querySelectorAll(".room")].some((r) => r.textContent.includes("build-log"))),
+);
+const leaveCall = (await page.evaluate(() => window.__calls)).filter((c) => c.cmd === "bling_leave").pop();
+check("deleting a room leaves the topic", leaveCall?.args.room === "build-log");
+check("lobby has no delete button", await page.evaluate(() => {
+  const row = [...document.querySelectorAll(".room-row")].find((r) => r.textContent.includes("lobby"));
+  const del = row?.querySelector(".room-del");
+  return !del || getComputedStyle(del).display === "none" || del.textContent === "×";
+}));
+
+// A reload must re-attach to the running swarm, not go blank.
+await page.reload({ waitUntil: "networkidle0" });
+await page.waitForFunction(() => (document.querySelector("#myAddr")?.dataset.addr || "").includes("/p2p/"), { timeout: 5000 });
+check(
+  "reload keeps the same listening address",
+  (await page.$eval("#myAddr", (n) => n.dataset.addr)).startsWith("/ip4/192.168.1.42/tcp/4101/p2p/"),
+);
+check("reload keeps the saved rooms", (await page.$$eval(".room", (n) => n.length)) >= 2);
+
 // Rename.
 await page.click("#myNick");
 await page.$eval("#nickInput", (n) => (n.value = ""));
@@ -217,4 +375,4 @@ if (failures.length) {
   console.log(`\n${failures.length} failed`);
   process.exit(1);
 }
-console.log(`\nPASS: 22 checks`);
+console.log(`\nPASS: ${checks} checks`);
