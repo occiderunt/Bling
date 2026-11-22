@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bling</title>
+    <link rel="icon" href="icon.png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <nav class="rail">
+        <div class="brand" data-tauri-drag-region>b</div>
+        <div class="rail-rooms" id="railRooms"></div>
+        <div class="rail-spacer"></div>
+        <button class="rail-avatar" id="railAvatar" title="you">b</button>
+      </nav>
+
+      <aside class="side">
+        <header class="side-head" data-tauri-drag-region>
+          <div class="wordmark">Bling</div>
+          <div class="pill" id="netState"><i></i><span>starting</span></div>
+        </header>
+
+        <section class="identity">
+          <div class="avatar" id="myAvatar">b</div>
+          <div class="identity-text">
+            <button class="nick" id="myNick" title="Click to rename">you</button>
+            <button class="peerid" id="myPeer" title="Click to copy peer id">connecting…</button>
+          </div>
+        </section>
+
+        <section class="block rooms-block">
+          <div class="block-head">
+            <span>Rooms</span>
+            <button class="mini" id="addRoomBtn" title="New room">+</button>
+          </div>
+          <form class="new-room" id="newRoomForm" hidden>
+            <input id="newRoomName" placeholder="room name" maxlength="24" autocomplete="off" />
+          </form>
+          <ul class="rooms" id="roomList"></ul>
+        </section>
+
+        <section class="block peers-block">
+          <div class="block-head">
+            <span>Peers</span>
+            <span class="count" id="peerCount">0</span>
+          </div>
+          <ul class="peers" id="peerList"></ul>
+          <div class="empty-peers" id="emptyPeers">
+            Nobody else yet. Peers on your Wi-Fi appear here on their own.
+          </div>
+          <form class="connect" id="dialForm">
+            <input id="dialAddr" placeholder="paste a multiaddr" autocomplete="off" spellcheck="false" />
+            <button type="submit" title="Connect">→</button>
+          </form>
+          <div class="my-addr">
+            <span class="my-addr-label">your address</span>
+            <button id="myAddr" title="Click to copy">finding…</button>
+          </div>
+        </section>
+      </aside>
+
+      <main class="chat">
+        <header class="chat-head" data-tauri-drag-region>
+          <div class="chat-title">
+            <h1 id="roomTitle"># lobby</h1>
+            <p id="roomSub">peer to peer · encrypted transport</p>
+          </div>
+          <div class="badges">
+            <span class="badge mint" id="transportBadge">noise</span>
+            <span class="badge" id="protoBadge">gossipsub</span>
+          </div>
+        </header>
+
+        <div class="messages" id="messages"></div>
+
+        <div class="composer">
+          <div class="composer-inner">
+            <textarea id="input" rows="1" placeholder="Message #lobby" autocomplete="off"></textarea>
+            <button id="send" class="send" disabled title="Send">
+              <span class="send-label">Send</span>
+              <span class="send-key">⏎</span>
+            </button>
+          </div>
+          <div class="composer-hint">
+            <span>Enter sends · Shift+Enter for a new line</span>
+            <span class="hint-net" id="hintNet">direct to peers</span>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div class="toasts" id="toasts"></div>
+
+    <template id="msgTemplate">
+      <article class="msg">
+        <div class="msg-avatar"></div>
+        <div class="msg-col">
+          <div class="msg-head"><span class="msg-who"></span><span class="msg-time"></span></div>
+          <div class="msg-bubble"></div>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
