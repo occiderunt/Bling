@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bling — chat that goes straight across</title>
+<meta name="description" content="A small peer-to-peer messenger built on rust-libp2p and Tauri. No account, no server in the middle. Free and MIT licensed for macOS and Windows.">
+<link rel="canonical" href="https://occiderunt.github.io/bling/">
+<meta name="theme-color" content="#0e0a0d">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Bling — chat that goes straight across">
+<meta property="og:description" content="Peer-to-peer chat over rust-libp2p. No account, no server in the middle.">
+<meta property="og:image" content="assets/og.png">
+<meta property="og:url" content="https://occiderunt.github.io/bling/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="assets/icon-512.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <a class="brand" href="#top" aria-label="Bling home">
+      <img src="assets/mark.png" alt="" width="30" height="30">
+      <span>Bling</span>
+    </a>
+    <nav aria-label="Primary">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#download">Download</a>
+      <a class="gh" href="https://github.com/occiderunt/Bling" target="_blank" rel="noreferrer">
+        GitHub
+        <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 9 9 3M4.5 3H9v4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero" id="top">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="pill"><span class="dot" aria-hidden="true"></span>v1.0.1 · free · MIT</p>
+        <h1>Chat that goes<br><em>straight across.</em></h1>
+        <p class="lede">Bling is a small desktop messenger that connects two machines directly. No account, no sign-up, no server holding the conversation in the middle.</p>
+        <div class="cta">
+          <a class="btn primary" href="#download">Download for macOS</a>
+          <a class="btn ghost" href="https://github.com/occiderunt/Bling" target="_blank" rel="noreferrer">Read the source</a>
+        </div>
+        <p class="fineprint">macOS on Apple silicon and Windows x64. The Windows installer is new and unsigned.</p>
+      </div>
+
+      <div class="hero-shot">
+        <div class="glow glow-rose" aria-hidden="true"></div>
+        <div class="glow glow-mint" aria-hidden="true"></div>
+        <figure class="frame">
+          <img src="assets/app.png" alt="The Bling window: a lobby room with three connected peers and a short conversation." width="1180" height="780">
+        </figure>
+        <div class="addr-card">
+          <span class="addr-label">your address, every launch</span>
+          <code>/ip4/192.168.1.42/tcp/4101/p2p/12D3KooW…</code>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="strip" aria-label="At a glance">
+    <div class="wrap strip-grid">
+      <div><span class="k">transport</span><span class="v">noise + yamux</span></div>
+      <div><span class="k">discovery</span><span class="v">mDNS or an address</span></div>
+      <div><span class="k">history</span><span class="v">on your disk</span></div>
+      <div><span class="k">license</span><span class="v">MIT</span></div>
+    </div>
+  </section>
+
+  <section class="section" id="how">
+    <div class="wrap">
+      <p class="eyebrow">how it works</p>
+      <h2>Three steps, no middleman.</h2>
+      <ol class="steps">
+        <li data-rise>
+          <span class="num">01</span>
+          <h3>Open the app</h3>
+          <p>It starts a libp2p swarm, picks a port, and shows your multiaddr at the bottom of the sidebar. Same port every launch, so the address you shared yesterday still works.</p>
+        </li>
+        <li data-rise>
+          <span class="num">02</span>
+          <h3>Swap addresses</h3>
+          <p>Paste theirs into the dial box, or send an invite link. A Bling invite carries the room and the address together, so one paste connects and joins.</p>
+        </li>
+        <li data-rise>
+          <span class="num">03</span>
+          <h3>Talk</h3>
+          <p>Messages ride a gossipsub topic straight to the other machine. Peers on the same network find each other with mDNS; across networks you point them at each other.</p>
+        </li>
+      </ol>
+      <div class="invite-demo" data-rise>
+        <div class="invite-text">
+          <span class="k">an invite looks like this</span>
+          <code>bling://design@/ip4/192.168.1.42/tcp/4101/p2p/12D3KooW…</code>
+        </div>
+        <span class="invite-note">paste it in the dial box to join #design</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section alt" id="features">
+    <div class="wrap">
+      <p class="eyebrow">what you get</p>
+      <h2>Small app, honest plumbing.</h2>
+      <div class="cards">
+        <article class="card" data-rise>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h6M13 12h6M8 8l-4 4 4 4M16 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <h3>Direct by default</h3>
+          <p>Your messages go machine to machine. Nobody runs a room server that reads the traffic, because there is no room server.</p>
+        </article>
+        <article class="card" data-rise>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <h3>Rooms as topics</h3>
+          <p>Make a room, it becomes a gossipsub topic. Hover it and leave; the subscription goes away. The lobby stays put.</p>
+        </article>
+        <article class="card" data-rise>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.6 1.6M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.6-1.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <h3>Invites that do both</h3>
+          <p>One link carries the room name and the address. Paste it and you are connected and in the room, without a second step.</p>
+        </article>
+        <article class="card" data-rise>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5M18 19a5 5 0 0 0-3-4.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <h3>Names before words</h3>
+          <p>Presence announces the moment you connect, so you see who is in the room before anyone types. Latency sits next to each name.</p>
+        </article>
+        <article class="card" data-rise>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8.5 10V7.5a3.5 3.5 0 0 1 7 0V10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <h3>Encrypted transport</h3>
+          <p>Every connection is noise-encrypted and every message is signed and validated before the app shows it. No plaintext on the wire.</p>
+        </article>
+        <article class="card" data-rise>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16v11H4zM4 7l8 6 8-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <h3>History stays home</h3>
+          <p>Messages live in your own app data, capped at 300 per room. No sync, no backup service, no copy on anyone else's machine.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="download">
+    <div class="wrap">
+      <p class="eyebrow">download</p>
+      <h2>Grab it, then grab a friend.</h2>
+      <p class="section-lede">Version 1.0.1. Free, MIT licensed, no account. The builds are ad-hoc signed rather than notarized, so macOS asks you to right-click → Open the first time.</p>
+      <div class="dl">
+        <a class="dl-card" href="https://github.com/occiderunt/Bling/releases/latest" target="_blank" rel="noreferrer" data-rise>
+          <svg class="plat" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.2 12.7c0-2.2 1.8-3.3 1.9-3.4-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-2.9-.8-1.5 0-2.9.9-3.7 2.2-1.6 2.7-.4 6.8 1.1 9 .7 1.1 1.6 2.3 2.8 2.2 1.1 0 1.5-.7 2.9-.7 1.3 0 1.7.7 2.9.7 1.2 0 2-1.1 2.7-2.2.9-1.3 1.2-2.5 1.2-2.6-.1 0-2.3-.9-2.3-3.5zM14.1 6.1c.6-.8 1-1.8.9-2.9-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-1 2.8 1 .1 2.1-.5 2.8-1.3z" fill="currentColor"/></svg>
+          <div>
+            <h3>macOS</h3>
+            <p>Apple silicon · .dmg</p>
+          </div>
+          <span class="go">Get the DMG <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 9 9 3M4.5 3H9v4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </a>
+        <a class="dl-card" href="https://github.com/occiderunt/Bling/releases/latest" target="_blank" rel="noreferrer" data-rise>
+          <svg class="plat" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.2 10.4 5v6.3H3zM11.4 4.8 21 3.4v7.9h-9.6zM3 12.3h7.4V19L3 17.8zM11.4 12.3H21v8l-9.6-1.4z" fill="currentColor"/></svg>
+          <div>
+            <h3>Windows</h3>
+            <p>x64 · .exe installer</p>
+          </div>
+          <span class="go">Get the installer <svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 9 9 3M4.5 3H9v4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </a>
+      </div>
+      <p class="dl-note">Windows builds are compiled on GitHub's Windows runners but haven't been run by hand on a Windows machine yet. If it misbehaves, <a href="https://github.com/occiderunt/Bling/issues" target="_blank" rel="noreferrer">open an issue</a>.</p>
+    </div>
+  </section>
+
+  <section class="section under">
+    <div class="wrap under-grid">
+      <div>
+        <p class="eyebrow">under the hood</p>
+        <h2>Rust owns the network.</h2>
+        <p>The swarm, the topics, the identity key and the encryption all live in a Rust backend. The webview only draws the window and talks to it over a handful of commands, which is why the UI never makes a network call of its own.</p>
+        <p class="mini">Rust · libp2p · Tauri 2 · WebView · MIT</p>
+      </div>
+      <pre class="code" aria-label="Architecture sketch"><span class="c">// one topic per room, validated and signed</span>
+gossipsub::IdentTopic::new(<span class="s">"bling/room/lobby"</span>)
+
+<span class="c">// your identity, kept across launches</span>
+identity.key <span class="c">→</span> PeerId <span class="c">→</span> stable address
+
+<span class="c">// dialing a friend</span>
+swarm.dial(
+  DialOpts::peer_id(peer)
+    .addresses(addrs)
+    .build()
+)</pre>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-inner">
+    <div class="brand small">
+      <img src="assets/mark.png" alt="" width="24" height="24">
+      <span>Bling</span>
+    </div>
+    <p>MIT licensed. Built by <a href="https://github.com/occiderunt" target="_blank" rel="noreferrer">occiderunt</a> with Rust, libp2p and Tauri.</p>
+    <a class="foot-link" href="https://github.com/occiderunt/Bling" target="_blank" rel="noreferrer">Source</a>
+  </div>
+</footer>
+
+<script src="script.js" defer></script>
+</body>
+</html>
