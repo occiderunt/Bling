@@ -88,17 +88,22 @@ cargo run --bin bot -- --listen # a throwaway peer that chats after you dial it
 ```
 
 The app listens on TCP and QUIC and shows its dialable address in the sidebar.
-Two ways to connect:
+Ways to connect:
 
 1. **mDNS**: peers on the same network appear by themselves. On macOS the app
    needs Local Network permission for this.
-2. **Paste a multiaddr**: copy `/ip4/<ip>/tcp/<port>/p2p/<peer-id>` from one
+2. **Invite**: press **invite** in the header. It shows a QR code and a
+   `bling://join?room=…&addr=…` link. The other device scans the code (Android)
+   or opens the link, and lands in the room, already dialled. Sending the link
+   in any chat app works too: it is a registered URL scheme on desktop and
+   Android.
+3. **Paste a multiaddr**: copy `/ip4/<ip>/tcp/<port>/p2p/<peer-id>` from one
    instance into the other's sidebar. This always works, including over
    loopback. The app asks for port 4101 both times, so the address survives a
    restart.
 
 Rooms live in the sidebar: `+` creates one, hovering a room reveals `×` to
-leave it, and **invite** in the header copies a `bling://room@multiaddr` link
+leave it, and **invite** in the header copies a `bling://join?room=…&addr=…` link
 that connects and opens the room when pasted into the same box.
 
 Peers announce their nickname the moment they connect, so names appear before

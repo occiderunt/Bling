@@ -52,6 +52,7 @@
           </div>
           <form class="connect" id="dialForm">
             <input id="dialAddr" placeholder="multiaddr or invite" autocomplete="off" spellcheck="false" />
+            <button type="button" class="scan" id="scanBtn" title="Scan a QR code" hidden>scan</button>
             <button type="submit" title="Connect">→</button>
           </form>
           <div class="my-addr">
@@ -69,7 +70,8 @@
             <p id="roomSub">peer to peer · encrypted transport</p>
           </div>
           <div class="chat-actions">
-            <button class="invite" id="inviteBtn" title="Copy an invite to this room">invite</button>
+            <button class="invite" id="inviteBtn" title="Pair another device">invite</button>
+            <button class="invite mobile-pair" id="pairBtn" title="Pair another device" hidden>pair</button>
             <div class="badges">
               <span class="badge mint" id="transportBadge">noise</span>
               <span class="badge" id="protoBadge">gossipsub</span>
@@ -94,6 +96,22 @@
           </div>
         </div>
       </main>
+    </div>
+
+    <div class="pair" id="pairSheet" hidden>
+      <div class="pair-card" role="dialog" aria-modal="true" aria-labelledby="pairTitle">
+        <div class="pair-head">
+          <h2 id="pairTitle">Pair another device</h2>
+          <button class="mini" id="pairClose" aria-label="Close">×</button>
+        </div>
+        <p class="pair-note" id="pairNote">Point their camera at this code, or send them the link.</p>
+        <div class="pair-qr" id="pairQr" aria-live="polite"></div>
+        <code class="pair-link" id="pairLink"></code>
+        <div class="pair-actions">
+          <button class="mini" id="pairCopy">copy link</button>
+          <button class="mini" id="pairScan" title="Scan a code on another device" hidden>scan a code</button>
+        </div>
+      </div>
     </div>
 
     <div class="scrim" id="scrim" hidden></div>

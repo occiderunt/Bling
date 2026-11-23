@@ -1,10 +1,10 @@
 [package]
 name = "bling"
-version = "1.1.0"
+version = "1.2.0"
 description = "Peer-to-peer chat over libp2p"
 authors = ["Bling"]
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.90"
 default-run = "bling"
 
 [lib]
@@ -19,6 +19,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
+tauri-plugin-deep-link = "2"
+qrcode = { version = "0.15", default-features = false, features = ["svg"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
@@ -35,6 +37,9 @@ libp2p = { version = "0.57", features = [
   "ping",
   "macros",
 ] }
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2"
 
 [profile.release]
 codegen-units = 1

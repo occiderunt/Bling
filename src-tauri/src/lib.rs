@@ -10,7 +10,7 @@ use std::{
 
 use crate::net::{Cmd, Net, Out};
 use serde::Serialize;
-use tauri::{ipc::Channel, Manager, State};
+use tauri::{ipc::Channel, Emitter, Manager, State};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::broadcast;
@@ -42,6 +42,8 @@ struct AppState {
     /// a channel without starting a second swarm (or a second port).
     bus: broadcast::Sender<Out>,
     snap: Arc<Mutex<Snapshot>>,
+    /// Invites handed to us by the OS before the webview was listening.
+    pending_links: Mutex<Vec<String>>,
 }
 
 impl AppState {
@@ -302,26 +304,86 @@ fn bling_dial(state: State<'_, AppState>, addr: String) -> Result<(), String> {
     })
 }
 
+/// An invite as a scannable QR. SVG keeps it crisp on any screen size; the UI
+/// drops the markup straight into the pair sheet.
+#[tauri::command]
+fn bling_qr(text: String) -> Result<String, String> {
+    let code = qrcode::QrCode::new(text.as_bytes()).map_err(|e| e.to_string())?;
+    Ok(code
+        .render::<qrcode::render::svg::Color>()
+        .quiet_zone(true)
+        .min_dimensions(240, 240)
+        .dark_color(qrcode::render::svg::Color("#0E0A0D"))
+        .light_color(qrcode::render::svg::Color("#FFFFFF"))
+        .build())
+}
+
+/// Hand over any deep links that arrived before the webview asked for them.
+#[tauri::command]
+fn bling_take_invites(state: State<AppState>) -> Vec<String> {
+    state
+        .pending_links
+        .lock()
+        .map(|mut links| std::mem::take(&mut *links))
+        .unwrap_or_default()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let (bus, _) = broadcast::channel::<Out>(512);
     tauri::Builder::default()
-        .setup(|_app| {
+        .setup(|app| {
             #[cfg(mobile)]
             {
                 use tauri_plugin_notification::NotificationExt;
-                let _ = _app.notification().request_permission();
+                let _ = app.notification().request_permission();
+                app.handle()
+                    .plugin(tauri_plugin_barcode_scanner::init())?;
+            }
+
+            // bling:// links are how one device hands its address to another.
+            // Catch the one that launched us, then keep catching them while we
+            // are already running.
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+
+                #[cfg(any(windows, target_os = "linux"))]
+                app.deep_link().register_all()?;
+
+                if let Ok(Some(urls)) = app.deep_link().get_current() {
+                    let state: State<AppState> = app.state();
+                    if let Ok(mut pending) = state.pending_links.lock() {
+                        pending.extend(urls.iter().map(|url| url.to_string()));
+                    };
+                }
+
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    let urls: Vec<String> =
+                        event.urls().into_iter().map(|url| url.to_string()).collect();
+                    {
+                        let state: State<AppState> = handle.state();
+                        if let Ok(mut pending) = state.pending_links.lock() {
+                            pending.extend(urls.iter().cloned());
+                        };
+                    }
+                    for url in urls {
+                        let _ = handle.emit("bling:invite", url);
+                    }
+                });
             }
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_deep_link::init())
         .manage(AppState {
             net: Mutex::new(None),
             peer_id: Mutex::new(None),
             rooms: Mutex::new(Vec::new()),
             bus,
             snap: Arc::new(Mutex::new(Snapshot::default())),
+            pending_links: Mutex::new(Vec::new()),
         })
         .invoke_handler(tauri::generate_handler![
             bling_start,
@@ -332,7 +394,9 @@ pub fn run() {
             bling_open_url,
             bling_dial,
             bling_notify,
-            bling_set_app_active
+            bling_set_app_active,
+            bling_qr,
+            bling_take_invites
         ])
         .run(tauri::generate_context!())
         .expect("error while running Bling");

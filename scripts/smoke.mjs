@@ -101,6 +101,9 @@ await page.evaluateOnNewDocument(
       if (cmd === "bling_dial") return null;
       if (cmd === "bling_join") return null;
       if (cmd === "bling_leave") return null;
+      if (cmd === "bling_qr")
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#fff"/></svg>';
+      if (cmd === "bling_take_invites") return [];
       return null;
     };
     window.__TAURI__ = { core: { invoke, Channel: FakeChannel } };
@@ -303,14 +306,41 @@ check(
   }),
 );
 
-// Invites.
+// Invites and pairing.
 await page.click("#inviteBtn");
-await new Promise((r) => setTimeout(r, 120));
+await new Promise((r) => setTimeout(r, 250));
+check("invite opens the pair sheet", !(await page.$eval("#pairSheet", (n) => n.hidden)));
+check("pair sheet draws a QR", await page.$eval("#pairQr", (n) => !!n.querySelector("svg")));
+const pairLink = await page.$eval("#pairLink", (n) => n.textContent);
+check(
+  "pair sheet prints a valid invite link",
+  (() => {
+    try {
+      const u = new URL(pairLink);
+      return u.host === "join" && u.searchParams.get("room") === "lobby" && u.searchParams.get("addr").startsWith("/ip4/");
+    } catch {
+      return false;
+    }
+  })(),
+);
+check("pair sheet hides scan on desktop", await page.$eval("#pairScan", (n) => n.hidden));
+await page.click("#pairCopy");
+await new Promise((r) => setTimeout(r, 150));
 const clip = await page.evaluate(() => window.__clip || "");
 check(
-  "invite copies a bling:// link with room and address",
-  clip.startsWith("bling://lobby@/ip4/") && clip.includes("/p2p/"),
+  "copy link copies a bling:// invite with room and address",
+  (() => {
+    try {
+      const u = new URL(clip);
+      return u.searchParams.get("room") === "lobby" && u.searchParams.get("addr").includes("/p2p/");
+    } catch {
+      return false;
+    }
+  })(),
 );
+await page.click("#pairClose");
+await new Promise((r) => setTimeout(r, 120));
+check("pair sheet closes", await page.$eval("#pairSheet", (n) => n.hidden));
 
 await page.$eval("#dialAddr", (n) => (n.value = ""));
 await page.type("#dialAddr", `bling://design@/ip4/192.168.1.42/tcp/4101/p2p/${PEER_A}`);

@@ -431,29 +431,157 @@ function removeRoom(room) {
   toast(`left #${room}`);
 }
 
-function inviteLink(room = state.current) {
-  const addr = $("#myAddr").dataset.addr;
-  return addr ? `bling://${room}@${addr}` : null;
-}
-
-function parseInvite(raw) {
-  if (!raw.startsWith("bling://")) return null;
-  const at = raw.indexOf("@", 8);
-  if (at < 0) return null;
-  const room = raw
-    .slice(8, at)
+function cleanRoom(raw) {
+  return String(raw || "")
     .trim()
     .toLowerCase()
     .replace(/^#/, "")
     .replace(/[^a-z0-9-]/g, "-")
     .slice(0, 24);
-  const addr = raw.slice(at + 1).trim();
+}
+
+// A real URL needs a host, so the invite is bling://join?room=…&addr=…
+// Older builds handed out bling://room@multiaddr; keep reading those.
+function inviteLink(room = state.current) {
+  const addr = $("#myAddr").dataset.addr;
+  if (!addr) return null;
+  return `bling://join?room=${encodeURIComponent(room)}&addr=${encodeURIComponent(addr)}`;
+}
+
+function parseInvite(raw) {
+  const text = String(raw || "").trim();
+  if (!text.startsWith("bling://")) return null;
+
+  let url = null;
+  try {
+    url = new URL(text);
+  } catch {
+    url = null;
+  }
+  if (url && url.host === "join") {
+    const room = cleanRoom(url.searchParams.get("room"));
+    const addr = (url.searchParams.get("addr") || "").trim();
+    if (!room || !addr.startsWith("/")) return null;
+    return { room, addr };
+  }
+
+  const at = text.indexOf("@", 8);
+  if (at < 0) return null;
+  const room = cleanRoom(text.slice(8, at));
+  const addr = text.slice(at + 1).trim();
   if (!room || !addr.startsWith("/")) return null;
   return { room, addr };
 }
 
+function isMobile() {
+  return /Android|iPhone|iPad/i.test(navigator.userAgent);
+}
+
+async function dialInvite(invite) {
+  try {
+    await invoke("bling_dial", { addr: invite.addr });
+    addRoom(invite.room);
+    toast(`joined #${invite.room}`);
+    return true;
+  } catch (err) {
+    toast(String(err), "warn");
+    return false;
+  }
+}
+
+let lastInvite = { url: "", at: 0 };
+
+function handleInviteUrl(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return;
+  // The launch link reaches us twice (plugin state and Rust's pending queue).
+  if (text === lastInvite.url && Date.now() - lastInvite.at < 8000) return;
+  lastInvite = { url: text, at: Date.now() };
+  const invite = parseInvite(text);
+  if (!invite) {
+    toast("that link is not something I can read", "warn");
+    return;
+  }
+  dialInvite(invite);
+}
+
+async function openPairSheet() {
+  const link = inviteLink();
+  if (!link) {
+    toast("still working out my address", "warn");
+    return;
+  }
+  $("#pairSheet").hidden = false;
+  $("#pairLink").textContent = link;
+  if (isMobile()) $("#pairScan").hidden = false;
+
+  const qr = $("#pairQr");
+  qr.classList.remove("failed");
+  qr.textContent = "";
+  try {
+    const svg = await invoke("bling_qr", { text: link });
+    if (typeof svg !== "string" || !svg.includes("<svg")) throw new Error("no code");
+    qr.innerHTML = svg;
+  } catch {
+    qr.classList.add("failed");
+    qr.textContent = "could not draw a code here";
+  }
+}
+
+function closePairSheet() {
+  $("#pairSheet").hidden = true;
+}
+
+async function scanInvite() {
+  try {
+    const asked = await invoke("plugin:barcode-scanner|request_permissions");
+    if (asked && asked.camera && asked.camera !== "granted") {
+      toast("the camera is off for Bling", "warn");
+      return;
+    }
+    const hit = await invoke("plugin:barcode-scanner|scan", {
+      formats: ["QR_CODE"],
+      windowed: false,
+      cameraDirection: "back",
+    });
+    const text = typeof hit === "string" ? hit : hit?.content;
+    if (!text) return;
+    closePairSheet();
+    handleInviteUrl(text);
+  } catch (err) {
+    const detail = String(err || "");
+    if (!/cancel/i.test(detail)) toast(detail || "could not scan", "warn");
+  }
+}
+
+// Links that launched the app, plus any that arrive while it is running.
+async function initLinks() {
+  const seen = new Set();
+  // On Android the launch link only exists once the webview has loaded, so ask
+  // the plugin directly rather than relying on what Rust saw during setup.
+  try {
+    const current = await invoke("plugin:deep-link|get_current");
+    if (current?.url) seen.add(current.url);
+  } catch {
+    /* desktop builds without a link, or no plugin */
+  }
+  try {
+    const urls = await invoke("bling_take_invites");
+    if (Array.isArray(urls)) urls.forEach((url) => seen.add(url));
+  } catch {
+    /* carry on with what we have */
+  }
+  for (const url of seen) handleInviteUrl(url);
+
+  try {
+    await window.__TAURI__?.event?.listen("bling:invite", (e) => handleInviteUrl(e.payload));
+  } catch {
+    /* no event bridge, no problem */
+  }
+}
+
 function addRoom(raw) {
-  const room = String(raw || "").trim().toLowerCase().replace(/^#/, "").replace(/[^a-z0-9-]/g, "-").slice(0, 24);
+  const room = cleanRoom(raw);
   if (!room) return;
   if (!state.rooms.includes(room)) {
     state.rooms.push(room);
@@ -637,14 +765,18 @@ function wire() {
     if (addr) copy(addr, "address copied, send it to a friend");
   });
 
-  $("#inviteBtn").addEventListener("click", () => {
-    const link = inviteLink();
-    if (!link) {
-      toast("still working out my address", "warn");
-      return;
-    }
-    copy(link, `invite to #${state.current} copied`);
+  $("#inviteBtn").addEventListener("click", () => openPairSheet());
+  $("#pairBtn").addEventListener("click", () => openPairSheet());
+  $("#pairClose").addEventListener("click", () => closePairSheet());
+  $("#pairSheet").addEventListener("click", (e) => {
+    if (e.target === $("#pairSheet")) closePairSheet();
   });
+  $("#pairCopy").addEventListener("click", () => {
+    const link = $("#pairLink").textContent;
+    if (link) copy(link, `invite to #${state.current} copied`);
+  });
+  $("#pairScan").addEventListener("click", () => scanInvite());
+  $("#scanBtn").addEventListener("click", () => scanInvite());
 
   $("#jumpLatest").addEventListener("click", () => scrollToEnd());
 
@@ -679,16 +811,16 @@ function wire() {
       toast("that is not a multiaddr or invite", "warn");
       return;
     }
-    try {
-      await invoke("bling_dial", { addr });
-      $("#dialAddr").value = "";
-      if (invite) {
-        addRoom(invite.room);
-        toast(`joined #${invite.room}`);
-      }
-    } catch (err) {
-      toast(String(err), "warn");
-    }
+    const ok = invite
+      ? await dialInvite(invite)
+      : await invoke("bling_dial", { addr }).then(
+          () => true,
+          (err) => {
+            toast(String(err), "warn");
+            return false;
+          },
+        );
+    if (ok) $("#dialAddr").value = "";
   });
 
   const menu = $("#mobileMenu");
@@ -726,6 +858,13 @@ renderIdentity();
 renderPeers();
 renderMessages();
 wire();
+initLinks();
+if (isMobile()) {
+  const scan = $("#scanBtn");
+  if (scan) scan.hidden = false;
+  const pair = $("#pairBtn");
+  if (pair) pair.hidden = false;
+}
 autosize();
 $("#input").focus();
 start();
