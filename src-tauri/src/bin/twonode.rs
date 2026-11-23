@@ -29,13 +29,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let key_a = net::new_identity();
     let key_b = net::new_identity();
 
-    let (net_a, swarm_a, cmd_a) = net::create(key_a, &["/ip4/127.0.0.1/tcp/0"])?;
-    let (_net_b, swarm_b, cmd_b) = net::create(key_b, &["/ip4/127.0.0.1/tcp/0"])?;
+    // A scratch dir for the peer book, so the restart check starts clean.
+    let book_dir = std::env::temp_dir().join("bling-booktest");
+    let _ = std::fs::remove_dir_all(&book_dir);
+    let book_path = book_dir.join("peers.json");
+
+    let (net_a, swarm_a, cmd_a) = net::create(key_a.clone(), &["/ip4/127.0.0.1/tcp/0"])?;
+    let (net_b, swarm_b, cmd_b) = net::create(key_b, &["/ip4/127.0.0.1/tcp/0"])?;
 
     let (tx_a, mut rx_a) = mpsc::unbounded_channel::<Out>();
     let (tx_b, mut rx_b) = mpsc::unbounded_channel::<Out>();
-    tokio::spawn(net::drive(swarm_a, cmd_a, tx_a, vec!["lobby".into()]));
-    tokio::spawn(net::drive(swarm_b, cmd_b, tx_b, vec!["lobby".into()]));
+    tokio::spawn(net::drive(swarm_a, cmd_a, tx_a, vec!["lobby".into()], net::PeerBook::at(book_path.clone())));
+    tokio::spawn(net::drive(swarm_b, cmd_b, tx_b, vec!["lobby".into()], net::PeerBook::memory()));
 
     // Wait for node B to report a dialable TCP address.
     let addr = loop {
@@ -55,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     check("node B is listening", !addr.is_empty());
     println!("     B address: {addr}");
 
-    net_a.send(Cmd::Dial(addr));
+    net_a.send(Cmd::Dial(addr.clone()));
 
     // Wait for the connection, then give gossipsub a heartbeat to graft the mesh.
     let mut connected = false;
@@ -133,6 +138,62 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     check("a second message also arrives", second);
+
+    // --- persistent pairing ---
+    // Pair with the full address, then let the book flush (it saves on the 3s tick).
+    net_a.send(Cmd::Dial(format!("{addr}/p2p/{}", net_b.peer_id)));
+    tokio::time::sleep(Duration::from_secs(4)).await;
+    let saved = std::fs::read_to_string(&book_path).unwrap_or_default();
+    check("the paired peer is written to peers.json", saved.contains(&net_b.peer_id.to_string()));
+
+    // Restart: same identity, same book, no manual dial.
+    drop(net_a);
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let (net_c, swarm_c, cmd_c) = net::create(key_a, &["/ip4/127.0.0.1/tcp/0"])?;
+    let (tx_c, mut rx_c) = mpsc::unbounded_channel::<Out>();
+    tokio::spawn(net::drive(
+        swarm_c,
+        cmd_c,
+        tx_c,
+        vec!["lobby".into()],
+        net::PeerBook::at(book_path.clone()),
+    ));
+
+    let mut redialled = false;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    while tokio::time::Instant::now() < deadline {
+        if let Ok(Some(Out::Peer { peer_id, online: true, .. })) =
+            tokio::time::timeout(Duration::from_millis(300), rx_c.recv()).await
+        {
+            if peer_id == net_b.peer_id.to_string() {
+                redialled = true;
+                break;
+            }
+        }
+    }
+    check("a restarted node redials saved peers by itself", redialled);
+
+    // Give gossipsub a moment to graft the mesh before publishing into it.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    net_b.send(Cmd::Publish {
+        room: "lobby".into(),
+        nick: "robin".into(),
+        text: "after restart".into(),
+    });
+    let mut after = false;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(8);
+    while tokio::time::Instant::now() < deadline {
+        if let Ok(Some(Out::Message { text, .. })) =
+            tokio::time::timeout(Duration::from_millis(300), rx_c.recv()).await
+        {
+            if text == "after restart" {
+                after = true;
+                break;
+            }
+        }
+    }
+    check("messages flow to the restarted node", after);
+    let _ = net_c;
 
     println!();
     if failures.get() == 0 {

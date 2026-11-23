@@ -5,7 +5,7 @@
 use std::{
     collections::{hash_map::DefaultHasher, HashMap, HashSet},
     hash::{Hash, Hasher},
-    path::Path,
+    path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -205,12 +205,127 @@ fn peer_of(addr: &Multiaddr) -> Option<PeerId> {
     })
 }
 
-/// Remember every address we hear for a peer. A single stale one (VPN, a
-/// changed interface) would otherwise poison every reconnect attempt.
-fn remember(known: &mut HashMap<PeerId, Vec<Multiaddr>>, peer: PeerId, addr: Multiaddr) {
-    let list = known.entry(peer).or_default();
-    if list.len() < 8 && !list.contains(&addr) {
-        list.push(addr);
+/// Peers you have paired with, kept on disk so a restart knows who to dial.
+/// Addresses are learned from identify and mDNS; a peer that has not been
+/// seen for a month is forgotten so the book does not grow forever.
+#[derive(Serialize, Deserialize)]
+struct SavedPeer {
+    addrs: Vec<String>,
+    #[serde(default)]
+    seen: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SavedBook {
+    v: u8,
+    peers: HashMap<String, SavedPeer>,
+}
+
+const PEER_TTL_MS: u64 = 30 * 24 * 60 * 60 * 1000;
+const PEER_MAX_ADDRS: usize = 8;
+
+pub struct PeerBook {
+    path: Option<PathBuf>,
+    known: HashMap<PeerId, Vec<Multiaddr>>,
+    seen: HashMap<PeerId, u64>,
+    dirty: bool,
+}
+
+impl PeerBook {
+    /// A book that forgets everything when the process exits. Test binaries
+    /// use this; the app uses `at`.
+    pub fn memory() -> Self {
+        Self { path: None, known: HashMap::new(), seen: HashMap::new(), dirty: false }
+    }
+
+    pub fn at(path: PathBuf) -> Self {
+        let mut book = Self {
+            path: Some(path.clone()),
+            known: HashMap::new(),
+            seen: HashMap::new(),
+            dirty: false,
+        };
+        let raw = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(_) => return book,
+        };
+        let saved: SavedBook = match serde_json::from_slice(&raw) {
+            Ok(s) => s,
+            Err(_) => return book,
+        };
+        let now = now_ms();
+        for (id, peer) in saved.peers {
+            if peer.seen != 0 && now.saturating_sub(peer.seen) > PEER_TTL_MS {
+                continue;
+            }
+            let peer_id: PeerId = match id.parse() {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+            let addrs: Vec<Multiaddr> = peer
+                .addrs
+                .iter()
+                .filter_map(|a| a.parse().ok())
+                .take(PEER_MAX_ADDRS)
+                .collect();
+            if addrs.is_empty() {
+                continue;
+            }
+            book.known.insert(peer_id, addrs);
+            book.seen.insert(peer_id, peer.seen);
+        }
+        book
+    }
+
+    pub fn known(&self) -> &HashMap<PeerId, Vec<Multiaddr>> {
+        &self.known
+    }
+
+    /// Remember every address we hear for a peer. A single stale one (VPN, a
+    /// changed interface) would otherwise poison every reconnect attempt.
+    pub fn remember(&mut self, peer: PeerId, addr: Multiaddr) {
+        let list = self.known.entry(peer).or_default();
+        if list.len() < PEER_MAX_ADDRS && !list.contains(&addr) {
+            list.push(addr);
+            self.dirty = true;
+        }
+        self.touch(peer);
+    }
+
+    pub fn touch(&mut self, peer: PeerId) {
+        self.seen.insert(peer, now_ms());
+        self.dirty = true;
+    }
+
+    /// Write the book if anything changed. Called on a timer, not per event.
+    pub fn flush(&mut self) {
+        if !self.dirty {
+            return;
+        }
+        let Some(path) = self.path.clone() else {
+            self.dirty = false;
+            return;
+        };
+        let mut peers: HashMap<String, SavedPeer> = HashMap::new();
+        for (peer, addrs) in &self.known {
+            peers.insert(
+                peer.to_string(),
+                SavedPeer {
+                    addrs: addrs.iter().map(|a| a.to_string()).collect(),
+                    seen: self.seen.get(peer).copied().unwrap_or(0),
+                },
+            );
+        }
+        let saved = SavedBook { v: 1, peers };
+        let Ok(json) = serde_json::to_vec_pretty(&saved) else { return };
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        // Write beside the real file so a crash mid-write cannot truncate it.
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, json).and_then(|_| std::fs::rename(&tmp, &path)).is_ok() {
+            self.dirty = false;
+        }
     }
 }
 
@@ -238,6 +353,7 @@ pub async fn drive(
     mut cmds: mpsc::UnboundedReceiver<Cmd>,
     out: mpsc::UnboundedSender<Out>,
     rooms: Vec<String>,
+    mut book: PeerBook,
 ) {
     let _ = out.send(Out::Ready { peer_id: swarm.local_peer_id().to_string() });
 
@@ -255,9 +371,12 @@ pub async fn drive(
     let mut nick = String::new();
     let mut addrs: Vec<String> = Vec::new();
     let mut connected: HashSet<PeerId> = HashSet::new();
-    let mut known: HashMap<PeerId, Vec<Multiaddr>> = HashMap::new();
-    // peer -> (when to try again, how many failures so far)
-    let mut retry: HashMap<PeerId, (Instant, u32)> = HashMap::new();
+    // Paired peers from the last run are dialled as soon as we come up.
+    let mut retry: HashMap<PeerId, (Instant, u32)> = book
+        .known()
+        .keys()
+        .map(|peer| (*peer, (Instant::now(), 0)))
+        .collect();
     // Dials the user asked for by hand, waiting for success or failure.
     let mut pending: Vec<(Option<PeerId>, Multiaddr, Instant)> = Vec::new();
 
@@ -289,7 +408,7 @@ pub async fn drive(
                         Ok(addr) => {
                             let peer = peer_of(&addr);
                             if let Some(peer) = peer {
-                                remember(&mut known, peer, addr.clone());
+                                book.remember(peer, addr.clone());
                                 retry.remove(&peer);
                             }
                             pending.push((peer, addr.clone(), Instant::now()));
@@ -349,7 +468,9 @@ pub async fn drive(
             }
             _ = redial_tick.tick() => {
                 let now = Instant::now();
-                let due: Vec<(PeerId, Vec<Multiaddr>)> = known
+                book.flush();
+                let due: Vec<(PeerId, Vec<Multiaddr>)> = book
+                    .known()
                     .iter()
                     .filter(|(peer, _)| !connected.contains(*peer))
                     .filter(|(peer, _)| retry.get(*peer).map(|(at, _)| *at <= now).unwrap_or(false))
@@ -389,6 +510,7 @@ pub async fn drive(
                     pending.retain(|(_, addr, _)| addr != &remote);
                     connected.insert(peer_id);
                     retry.remove(&peer_id);
+                    book.touch(peer_id);
                     let _ = out.send(Out::Peer {
                         peer_id: peer_id.to_string(),
                         addr: None,
@@ -399,7 +521,7 @@ pub async fn drive(
                 }
                 SwarmEvent::ConnectionClosed { peer_id, .. } => {
                     connected.remove(&peer_id);
-                    if known.contains_key(&peer_id) {
+                    if book.known().contains_key(&peer_id) {
                         retry.insert(peer_id, (Instant::now() + Duration::from_secs(3), 0));
                     }
                     let _ = out.send(Out::Peer {
@@ -419,7 +541,7 @@ pub async fn drive(
                 }
                 SwarmEvent::Behaviour(BehavioursEvent::Mdns(mdns::Event::Discovered(list))) => {
                     for (peer_id, addr) in list {
-                        remember(&mut known, peer_id, addr.clone());
+                        book.remember(peer_id, addr.clone());
                         swarm.behaviour_mut().gossipsub.add_explicit_peer(&peer_id);
                         let _ = out.send(Out::Peer {
                             peer_id: peer_id.to_string(),
@@ -487,7 +609,7 @@ pub async fn drive(
                     ..
                 })) => {
                     for addr in &info.listen_addrs {
-                        remember(&mut known, peer_id, addr.clone());
+                        book.remember(peer_id, addr.clone());
                     }
                     let addr = info.listen_addrs.first().map(|a| a.to_string());
                     let _ = out.send(Out::Peer {
@@ -501,4 +623,5 @@ pub async fn drive(
             }
         }
     }
+    book.flush();
 }

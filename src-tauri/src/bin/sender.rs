@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let key = net::new_identity();
     let (net, swarm, cmds) = net::create(key, &["/ip4/0.0.0.0/tcp/0"])?;
     let (tx, mut rx) = mpsc::unbounded_channel();
-    tokio::spawn(net::drive(swarm, cmds, tx, vec![room.clone()]));
+    tokio::spawn(net::drive(swarm, cmds, tx, vec![room.clone()], net::PeerBook::memory()));
     println!("sender peer {}", net.peer_id);
 
     net.send(Cmd::Dial(target.clone()));

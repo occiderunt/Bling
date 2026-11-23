@@ -41,6 +41,7 @@ Repositories). Its APK is the same signed build as the one in Releases.
   - noise + yamux over TCP, plus QUIC
   - identify, ping, mDNS for local discovery
   - ed25519 identity persisted in the app data dir, so your peer id is stable
+  - paired peers saved to `peers.json`, so a restart redials them on its own
 
 ## Build it yourself
 

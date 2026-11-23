@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let listen = format!("/ip4/0.0.0.0/tcp/{port}");
     let (net, swarm, cmds) = net::create(key, &[listen.as_str()])?;
     let (tx, mut rx) = mpsc::unbounded_channel();
-    tokio::spawn(net::drive(swarm, cmds, tx, vec!["lobby".into()]));
+    tokio::spawn(net::drive(swarm, cmds, tx, vec!["lobby".into()], net::PeerBook::memory()));
     println!("bot peer {}", net.peer_id);
 
     let lines = [

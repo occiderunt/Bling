@@ -187,11 +187,14 @@ async fn bling_start(
         }
     });
 
+    // Paired peers live next to the identity so a restart can find them again.
+    let book = net::PeerBook::at(dir.join("peers.json"));
     tauri::async_runtime::spawn(net::drive(
         swarm,
         cmd_rx,
         out_tx.clone(),
         vec!["lobby".to_string()],
+        book,
     ));
 
     if let Some(nick) = nick {
