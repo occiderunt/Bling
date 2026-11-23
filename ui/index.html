@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Bling</title>
     <link rel="icon" href="icon.png" />
     <link rel="stylesheet" href="styles.css" />
@@ -63,6 +63,7 @@
 
       <main class="chat">
         <header class="chat-head" data-tauri-drag-region>
+          <button class="mobile-menu" id="mobileMenu" aria-label="Open rooms and peers">☰</button>
           <div class="chat-title">
             <h1 id="roomTitle"># lobby</h1>
             <p id="roomSub">peer to peer · encrypted transport</p>
@@ -95,6 +96,7 @@
       </main>
     </div>
 
+    <div class="scrim" id="scrim" hidden></div>
     <div class="toasts" id="toasts"></div>
 
     <template id="msgTemplate">

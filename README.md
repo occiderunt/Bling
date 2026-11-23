@@ -2,7 +2,7 @@
 
 A peer-to-peer chat app. Rose `#D1305E` and mint `#30D1A3` on near-black.
 
-Messages travel machine to machine over Rust-libp2p. There is no server, no account,
+Messages travel machine to machine over libp2p. There is no server, no account,
 no message store in the middle.
 
 ![Bling talking to a peer](shots/04-live-peer.png)
@@ -15,8 +15,17 @@ Grab the latest build from [Releases](https://github.com/occiderunt/Bling/releas
   build is ad-hoc signed, so on first launch use right-click → Open, or run
   `xattr -dr com.apple.quarantine /Applications/Bling.app`.
 - **Windows**: run the `-setup.exe`.
+- **Android** (arm64): install the APK from Releases. It is signed with the
+  Bling release key, so it updates in place over earlier versions.
 
-Both platforms are built by GitHub Actions from the tag, every release.
+Desktop builds are produced by GitHub Actions from the tag, every release. The
+Android release build is signed locally with the project's release key and
+attached to the release; CI does not sign Android builds, so you can reproduce
+an unsigned APK with the steps below.
+
+An F-Droid repo also carries Bling:
+`https://occiderunt.github.io/f-droid/repo` (add it in F-Droid → Settings →
+Repositories). Its APK is the same signed build as the one in Releases.
 
 ## Stack
 
@@ -31,10 +40,39 @@ Both platforms are built by GitHub Actions from the tag, every release.
 
 ## Build it yourself
 
+Desktop:
+
 ```bash
 npm install
 npm run tauri build -- --bundles app   # or dmg / nsis
 ```
+
+Android needs the SDK and NDK plus a JDK, then:
+
+```bash
+npm install
+npx tauri android init     # only if src-tauri/gen/android is missing
+npx tauri android build --apk --target aarch64
+```
+
+The Android project lives in `src-tauri/gen/android` and is committed, because
+it carries the hand edits Tauri does not regenerate:
+
+- `AndroidManifest.xml` declares `POST_NOTIFICATIONS` and
+  `ACCESS_LOCAL_NETWORK`. Android 17 (API 37) blocks LAN traffic by default, so
+  `MainActivity` requests that permission at runtime; without it libp2p dials
+  and mDNS silently fail with "failed to negotiate transport protocols".
+- The launcher icon, adaptive icon background, and the `compileSdk`/`targetSdk`
+  37 targets with `minSdk 24`.
+- `app/build.gradle.kts` reads release signing from `keystore.properties` or
+  `BLING_KEYSTORE` / `BLING_KEYSTORE_PASSWORD` / `BLING_KEY_ALIAS` env vars.
+  Copy `src-tauri/gen/android/keystore.properties.example` to sign. With no
+  keystore configured, the release APK is simply unsigned: use
+  `apksigner sign --ks <keystore> app-universal-release-unsigned.apk`.
+
+Desktop and Android share the same Rust backend. The mobile entry point is
+`#[cfg_attr(mobile, tauri::mobile_entry_point)] pub fn run()` in
+`src-tauri/src/lib.rs`; `main.rs` calls it.
 
 Dev binaries:
 
@@ -85,7 +123,10 @@ cargo run --bin twonode  # networking checks on real sockets
 - Transport is encrypted and signed by libp2p (noise + gossipsub strict
   validation), but payloads are plain JSON, not a sealed E2E format.
 - Ping latency shows `0ms` over loopback; that is honest, not a bug.
+- Android notifications only arrive while the app process is alive; real push
+  with the app killed needs FCM, which does not fit a serverless app. There is
+  no iOS build yet.
 
-## License and Credits
+## License
 
-MIT licensed, couldn't be done without [Rust-libp2p](https://github.com/libp2p/rust-libp2p).
+MIT

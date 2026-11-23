@@ -393,8 +393,16 @@ function pushMessage(room, msg) {
   if (room === state.current) renderMessages();
 }
 
+function closeDrawer() {
+  const side = document.querySelector(".side");
+  side.classList.remove("open");
+  const scrim = $("#scrim");
+  if (scrim) scrim.hidden = true;
+}
+
 function switchRoom(room) {
   if (!state.rooms.includes(room)) return;
+  closeDrawer();
   state.current = room;
   delete state.unread[room];
   saveLocal();
@@ -683,10 +691,34 @@ function wire() {
     }
   });
 
+  const menu = $("#mobileMenu");
+  if (menu) {
+    menu.addEventListener("click", () => {
+      const side = document.querySelector(".side");
+      const open = side.classList.toggle("open");
+      $("#scrim").hidden = !open;
+    });
+  }
+  const scrim = $("#scrim");
+  if (scrim) scrim.addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDrawer();
+  });
+
   document.addEventListener("click", (e) => {
     if (e.target.closest(".rail-room")) return;
   });
 }
+
+// Tell Rust whether the app is actually on screen; notifications only fire
+// when it is not. window focus alone is unreliable on Android.
+function reportAppActive() {
+  invoke?.("bling_set_app_active", { active: !document.hidden }).catch(() => {});
+}
+document.addEventListener("visibilitychange", reportAppActive);
+window.addEventListener("focus", reportAppActive);
+window.addEventListener("blur", reportAppActive);
+reportAppActive();
 
 loadLocal();
 renderRooms();

@@ -1064,3 +1064,109 @@ button {
 .notice {
   user-select: text;
 }
+
+/* ---------- phones ---------- */
+
+.mobile-menu {
+  display: none;
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 40;
+}
+
+@media (max-width: 700px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rail {
+    display: none;
+  }
+
+  .side {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(86vw, 330px);
+    z-index: 50;
+    transform: translateX(-102%);
+    transition: transform 180ms ease;
+    box-shadow: 18px 0 60px rgba(0, 0, 0, 0.55);
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .side.open {
+    transform: none;
+  }
+
+  /* Android zooms the page when a focused input is under 16px, which
+     mangles the drawer layout, so keep form text at 16px on phones. */
+  .composer textarea,
+  .connect input {
+    font-size: 16px;
+  }
+
+  .mobile-menu {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    font-size: 17px;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    flex: 0 0 auto;
+  }
+
+  .chat-head {
+    height: auto;
+    align-items: center;
+    gap: 10px;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 12px;
+  }
+
+  .chat-title {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .chat-title h1 {
+    font-size: 16px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chat-title p,
+  .badges,
+  .invite {
+    display: none;
+  }
+
+  .messages {
+    padding: 16px 14px 8px;
+  }
+
+  .composer {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .composer-inner {
+    margin: 0 10px;
+  }
+
+  .composer-hint {
+    display: none;
+  }
+
+  .msg-bubble {
+    max-width: 100%;
+  }
+}

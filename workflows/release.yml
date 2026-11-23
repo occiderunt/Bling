@@ -1,0 +1,67 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            args: "--target aarch64-apple-darwin --bundles app,dmg"
+          - platform: windows-latest
+            target: ""
+            args: "--bundles nsis"
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: .
+          tauriScript: npx tauri
+          args: ${{ matrix.args }}
+          tagName: v__VERSION__
+          releaseName: "Bling v__VERSION__"
+          releaseBody: |
+            Peer-to-peer chat. No account, no server.
+
+            **macOS**: download the `.dmg`, open it, drag Bling to Applications.
+            The build is ad-hoc signed, so on first launch use right-click → Open,
+            or run `xattr -dr com.apple.quarantine /Applications/Bling.app`.
+
+            **Windows**: download the `-setup.exe` and run it.
+
+            **Android** (arm64): download the APK and install it. It is signed with
+            the Bling release key, so it upgrades in place over older versions.
+          releaseDraft: false
+          prerelease: false

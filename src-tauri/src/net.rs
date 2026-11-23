@@ -258,8 +258,11 @@ pub async fn drive(
     let mut known: HashMap<PeerId, Vec<Multiaddr>> = HashMap::new();
     // peer -> (when to try again, how many failures so far)
     let mut retry: HashMap<PeerId, (Instant, u32)> = HashMap::new();
+    // Dials the user asked for by hand, waiting for success or failure.
+    let mut pending: Vec<(Option<PeerId>, Multiaddr, Instant)> = Vec::new();
 
     let mut redial_tick = tokio::time::interval(Duration::from_secs(3));
+    let mut dial_tick = tokio::time::interval(Duration::from_secs(1));
     let mut presence_tick = tokio::time::interval(Duration::from_secs(6));
     presence_tick.tick().await;
 
@@ -284,10 +287,12 @@ pub async fn drive(
                 Some(Cmd::Dial(raw)) => {
                     match raw.parse::<Multiaddr>() {
                         Ok(addr) => {
-                            if let Some(peer) = peer_of(&addr) {
+                            let peer = peer_of(&addr);
+                            if let Some(peer) = peer {
                                 remember(&mut known, peer, addr.clone());
                                 retry.remove(&peer);
                             }
+                            pending.push((peer, addr.clone(), Instant::now()));
                             match swarm.dial(addr.clone()) {
                                 Ok(()) => { let _ = out.send(Out::Notice { text: format!("dialing {addr}") }); }
                                 Err(e) => { let _ = out.send(Out::Notice { text: format!("dial failed: {e}") }); }
@@ -325,6 +330,23 @@ pub async fn drive(
                     }
                 }
             },
+            _ = dial_tick.tick() => {
+                let now = Instant::now();
+                let mut still = Vec::new();
+                for (peer, addr, at) in pending.drain(..) {
+                    if now.duration_since(at) >= Duration::from_secs(15) {
+                        let _ = out.send(Out::Notice {
+                            text: format!("no answer from {addr} after 15s, giving up"),
+                        });
+                        if let Some(peer) = peer {
+                            retry.remove(&peer);
+                        }
+                    } else {
+                        still.push((peer, addr, at));
+                    }
+                }
+                pending = still;
+            }
             _ = redial_tick.tick() => {
                 let now = Instant::now();
                 let due: Vec<(PeerId, Vec<Multiaddr>)> = known
@@ -359,7 +381,12 @@ pub async fn drive(
                         let _ = out.send(Out::Listening { addrs: addrs.clone() });
                     }
                 }
-                SwarmEvent::ConnectionEstablished { peer_id, .. } => {
+                SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
+                    pending.retain(|(p, _, _)| *p != Some(peer_id));
+                    // A manual dial by address has no peer id, so clear it by address
+                    // or it would later report a bogus "no answer" timeout.
+                    let remote = endpoint.get_remote_address().clone();
+                    pending.retain(|(_, addr, _)| addr != &remote);
                     connected.insert(peer_id);
                     retry.remove(&peer_id);
                     let _ = out.send(Out::Peer {
@@ -383,10 +410,11 @@ pub async fn drive(
                     });
                 }
                 SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
-                    // The retry slot was already booked before dialing; only
-                    // report the failure here.
-                    if peer_id.is_none() {
-                        let _ = out.send(Out::Notice { text: format!("could not connect: {error}") });
+                    // Only surface failures for dials the user actually made;
+                    // background redials stay quiet so the timeline isn't spam.
+                    if let Some(pos) = pending.iter().position(|(p, _, _)| *p == peer_id) {
+                        let (_, addr, _) = pending.remove(pos);
+                        let _ = out.send(Out::Notice { text: format!("could not connect to {addr}: {error}") });
                     }
                 }
                 SwarmEvent::Behaviour(BehavioursEvent::Mdns(mdns::Event::Discovered(list))) => {

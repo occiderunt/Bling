@@ -60,5 +60,8 @@ jobs:
             or run `xattr -dr com.apple.quarantine /Applications/Bling.app`.
 
             **Windows**: download the `-setup.exe` and run it.
+
+            **Android** (arm64): download the APK and install it. It is signed with
+            the Bling release key, so it upgrades in place over older versions.
           releaseDraft: false
           prerelease: false
