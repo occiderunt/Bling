@@ -9,7 +9,7 @@ no message store in the middle.
 
 ## Download
 
-Grab the latest build from [Releases](https://github.com/occiderunt/Bling/releases).
+Grab the latest build from [Releases](https://github.com/occiderunt/bling/releases).
 
 - **macOS** (Apple silicon): open the `.dmg`, drag Bling to Applications. The
   build is ad-hoc signed, so on first launch use right-click → Open, or run
