@@ -17,7 +17,9 @@ Grab the latest build from [Releases](https://github.com/occiderunt/bling/releas
 - **Windows**: run the `-setup.exe`.
 - **Android** (arm64): install the APK from Releases. It is signed with the
   Bling release key, so it updates in place over earlier versions.
-  Or if you have F-Droid installed, click this [<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="80">](https://fdroid.link/#https://occiderunt.github.io/f-droid/repo?fingerprint=64:36:80:73:B6:2C:6B:30:86:D3:0B:92:96:1C:D3:93:AA:2B:96:0E:1E:68:2C:D7:F3:BE:CA:CB:9D:7D:99:56)
+  Or if you have F-Droid installed, click this:
+
+  [<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" alt="Get it on F-Droid" height="80">](https://fdroid.link/#https://occiderunt.github.io/f-droid/repo?fingerprint=64:36:80:73:B6:2C:6B:30:86:D3:0B:92:96:1C:D3:93:AA:2B:96:0E:1E:68:2C:D7:F3:BE:CA:CB:9D:7D:99:56)
 
 
 Desktop builds are produced by GitHub Actions from the tag, every release. The
